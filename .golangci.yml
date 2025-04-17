@@ -2,21 +2,18 @@
 # https://golangci-lint.run/usage/configuration/
 run:
   timeout: 30s
-
   sort-results: true
 
 linters:
   fast: false
   presets:
     - bugs
-    - complexity
     - unused
   enable:
     - misspell
 
 linters-settings:
   govet:
-    check-shadowing: false
   misspell:
     locale: US
 

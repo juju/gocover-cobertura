@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -23,7 +24,7 @@ func Test_Main(t *testing.T) {
 	require.NoError(t, err)
 	os.Stdout = temp
 	main()
-	outputBytes, err := ioutil.ReadFile(fname)
+	outputBytes, err := os.ReadFile(fname)
 	require.NoError(t, err)
 
 	outputString := string(outputBytes)
@@ -58,19 +59,24 @@ func TestConvertEmpty(t *testing.T) {
 	data := `mode: set`
 
 	pipe2rd, pipe2wr := io.Pipe()
-	go func() {
-		err := convert(strings.NewReader(data), pipe2wr, &Ignore{})
-		require.NoError(t, err)
-	}()
+
+	eg, _ := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		return convert(strings.NewReader(data), pipe2wr, &Ignore{})
+	})
 
 	v := Coverage{}
 	dec := xml.NewDecoder(pipe2rd)
 	err := dec.Decode(&v)
 	require.NoError(t, err)
+	pipe2rd.Close()
 
 	require.Equal(t, "coverage", v.XMLName.Local)
 	require.Nil(t, v.Sources)
 	require.Nil(t, v.Packages)
+
+	err = eg.Wait()
+	require.NoError(t, err)
 }
 
 func TestParseProfileNilPackages(t *testing.T) {
@@ -104,7 +110,7 @@ func TestParseProfileDoesNotExist(t *testing.T) {
 	// Windows vs. Linux
 	if !strings.Contains(err.Error(), "system cannot find the file specified") &&
 		!strings.Contains(err.Error(), "no such file or directory") {
-		t.Errorf(err.Error())
+		t.Error(err.Error())
 	}
 }
 
@@ -121,7 +127,8 @@ func TestParseProfilePermissionDenied(t *testing.T) {
 		t.Skip("chmod is not supported by Windows")
 	}
 
-	tempFile, err := ioutil.TempFile("", "not-readable")
+	tempFile, err := os.CreateTemp("", "not-readable")
+	defer tempFile.Close()
 	require.NoError(t, err)
 
 	defer func() { err := os.Remove(tempFile.Name()); require.NoError(t, err) }()
@@ -145,6 +152,7 @@ func TestParseProfilePermissionDenied(t *testing.T) {
 
 func TestConvertSetMode(t *testing.T) {
 	pipe1rd, err := os.Open("testdata/testdata_set.txt")
+	defer pipe1rd.Close()
 	require.NoError(t, err)
 
 	pipe2rd, pipe2wr := io.Pipe()
@@ -159,27 +167,30 @@ func TestConvertSetMode(t *testing.T) {
 		convwr = io.MultiWriter(convwr, testwr)
 	}
 
-	go func() {
+	eg, _ := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
 		err := convert(pipe1rd, convwr, &Ignore{
 			GeneratedFiles: true,
 			Files:          regexp.MustCompile(`[\\/]func[45]\.go$`),
 		})
 		if err != nil {
-			panic(err)
+			return err
 		}
-	}()
+		return nil
+	})
 
 	v := Coverage{}
 	dec := xml.NewDecoder(pipe2rd)
 	err = dec.Decode(&v)
 	require.NoError(t, err)
+	pipe2rd.Close()
 
 	require.Equal(t, "coverage", v.XMLName.Local)
 	require.Len(t, v.Sources, 1)
 	require.Len(t, v.Packages, 1)
 
 	p := v.Packages[0]
-	require.Equal(t, "github.com/boumenot/gocover-cobertura/testdata", strings.TrimRight(p.Name, "/"))
+	require.Equal(t, "github.com/juju/gocover-cobertura/testdata", strings.TrimRight(p.Name, "/"))
 	require.NotNil(t, p.Classes)
 	require.Len(t, p.Classes, 2)
 
@@ -228,4 +239,7 @@ func TestConvertSetMode(t *testing.T) {
 	require.Equal(t, "testdata/func2.go", c.Filename)
 	require.NotNil(t, c.Methods)
 	require.Len(t, c.Methods, 3)
+
+	err = eg.Wait()
+	require.NoError(t, err)
 }

@@ -59,12 +59,12 @@ func main() {
 func convert(in io.Reader, out io.Writer, ignore *Ignore) error {
 	profiles, err := ParseProfiles(in, ignore)
 	if err != nil {
-		return fmt.Errorf("parsing profile lines: %v", err)
+		return fmt.Errorf("parsing profile lines: %w", err)
 	}
 
 	pkgs, err := getPackages(profiles)
 	if err != nil {
-		return fmt.Errorf("getting packages: %v", err)
+		return fmt.Errorf("getting packages: %w", err)
 	}
 
 	sources := make([]*Source, 0)
@@ -79,7 +79,7 @@ func convert(in io.Reader, out io.Writer, ignore *Ignore) error {
 
 	coverage := Coverage{Sources: sources, Packages: nil, Timestamp: time.Now().UnixNano() / int64(time.Millisecond)}
 	if err := coverage.parseProfiles(profiles, pkgMap, ignore); err != nil {
-		return fmt.Errorf("parsing profiles: %v", err)
+		return fmt.Errorf("parsing profiles: %w", err)
 	}
 
 	_, _ = fmt.Fprint(out, xml.Header)
@@ -88,7 +88,7 @@ func convert(in io.Reader, out io.Writer, ignore *Ignore) error {
 	encoder := xml.NewEncoder(out)
 	encoder.Indent("", "  ")
 	if err := encoder.Encode(coverage); err != nil {
-		return fmt.Errorf("encoding coverage xml: %v", err)
+		return fmt.Errorf("encoding coverage xml: %w", err)
 	}
 
 	_, _ = fmt.Fprintln(out)
@@ -133,7 +133,7 @@ func (cov *Coverage) parseProfiles(profiles []*Profile, pkgMap map[string]*packa
 		pkgName := getPackageName(profile.FileName)
 		pkgPkg := pkgMap[pkgName]
 		if err := cov.parseProfile(profile, pkgPkg, ignore); err != nil {
-			return fmt.Errorf("parsing profile %s for package %s: %v", profile.FileName, pkgName, err)
+			return fmt.Errorf("parsing profile %s for package %s: %w", profile.FileName, pkgName, err)
 		}
 	}
 	cov.LinesValid = cov.NumLines()
@@ -151,11 +151,11 @@ func (cov *Coverage) parseProfile(profile *Profile, pkgPkg *packages.Package, ig
 	fset := token.NewFileSet()
 	parsed, err := parser.ParseFile(fset, absFilePath, nil, 0)
 	if err != nil {
-		return fmt.Errorf("parsing file %s: %v", absFilePath, err)
+		return fmt.Errorf("parsing file %s: %w", absFilePath, err)
 	}
 	data, err := os.ReadFile(absFilePath)
 	if err != nil {
-		return fmt.Errorf("reading file %s: %v", absFilePath, err)
+		return fmt.Errorf("reading file %s: %w", absFilePath, err)
 	}
 
 	if ignore.Match(fileName, data) {
@@ -175,7 +175,7 @@ func (cov *Coverage) parseProfile(profile *Profile, pkgPkg *packages.Package, ig
 		}
 	}
 	if pkg == nil {
-		pkg = &Package{Name: pkgPkg.ID, Classes: []*Class{}}
+		pkg = &Package{Name: pkgPkg.ID}
 		cov.Packages = append(cov.Packages, pkg)
 	}
 	visitor := &fileVisitor{
