@@ -41,7 +41,7 @@ func TestConvertParseProfilesError(t *testing.T) {
 	}()
 	err := convert(strings.NewReader("invalid data"), pipe2wr, &Ignore{})
 	require.Error(t, err)
-	require.Equal(t, "bad mode line: invalid data", err.Error())
+	require.Equal(t, "parsing profile lines: bad mode line: invalid data", err.Error())
 }
 
 func TestConvertOutputError(t *testing.T) {
@@ -51,7 +51,7 @@ func TestConvertOutputError(t *testing.T) {
 	defer func() { err := pipe2rd.Close(); require.NoError(t, err) }()
 	err = convert(strings.NewReader("mode: set"), pipe2wr, &Ignore{})
 	require.Error(t, err)
-	require.Equal(t, "io: read/write on closed pipe", err.Error())
+	require.Equal(t, "encoding coverage xml: io: read/write on closed pipe", err.Error())
 }
 
 func TestConvertEmpty(t *testing.T) {
@@ -136,6 +136,7 @@ func TestParseProfilePermissionDenied(t *testing.T) {
 		Module: &packages.Module{
 			Path: filepath.Dir(tempFile.Name()),
 		},
+		Dir: filepath.Dir(tempFile.Name()),
 	}
 	err = v.parseProfile(&profile, &pkg, &Ignore{})
 	require.Error(t, err)

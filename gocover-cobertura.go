@@ -59,24 +59,27 @@ func main() {
 func convert(in io.Reader, out io.Writer, ignore *Ignore) error {
 	profiles, err := ParseProfiles(in, ignore)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing profile lines: %v", err)
 	}
 
 	pkgs, err := getPackages(profiles)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting packages: %v", err)
 	}
 
 	sources := make([]*Source, 0)
 	pkgMap := make(map[string]*packages.Package)
 	for _, pkg := range pkgs {
+		if pkg.Module == nil {
+			return fmt.Errorf("package %s has no module", pkg.ID)
+		}
 		sources = appendIfUnique(sources, pkg.Module.Dir)
 		pkgMap[pkg.ID] = pkg
 	}
 
 	coverage := Coverage{Sources: sources, Packages: nil, Timestamp: time.Now().UnixNano() / int64(time.Millisecond)}
 	if err := coverage.parseProfiles(profiles, pkgMap, ignore); err != nil {
-		return err
+		return fmt.Errorf("parsing profiles: %v", err)
 	}
 
 	_, _ = fmt.Fprint(out, xml.Header)
@@ -85,7 +88,7 @@ func convert(in io.Reader, out io.Writer, ignore *Ignore) error {
 	encoder := xml.NewEncoder(out)
 	encoder.Indent("", "  ")
 	if err := encoder.Encode(coverage); err != nil {
-		return err
+		return fmt.Errorf("encoding coverage xml: %v", err)
 	}
 
 	_, _ = fmt.Fprintln(out)
@@ -121,12 +124,7 @@ func getPackageName(filename string) string {
 
 func findAbsFilePath(pkg *packages.Package, profileName string) string {
 	filename := filepath.Base(profileName)
-	for _, fullpath := range pkg.GoFiles {
-		if filepath.Base(fullpath) == filename {
-			return fullpath
-		}
-	}
-	return ""
+	return filepath.Join(pkg.Dir, filename)
 }
 
 func (cov *Coverage) parseProfiles(profiles []*Profile, pkgMap map[string]*packages.Package, ignore *Ignore) error {
@@ -135,7 +133,7 @@ func (cov *Coverage) parseProfiles(profiles []*Profile, pkgMap map[string]*packa
 		pkgName := getPackageName(profile.FileName)
 		pkgPkg := pkgMap[pkgName]
 		if err := cov.parseProfile(profile, pkgPkg, ignore); err != nil {
-			return err
+			return fmt.Errorf("parsing profile %s for package %s: %v", profile.FileName, pkgName, err)
 		}
 	}
 	cov.LinesValid = cov.NumLines()
@@ -153,11 +151,11 @@ func (cov *Coverage) parseProfile(profile *Profile, pkgPkg *packages.Package, ig
 	fset := token.NewFileSet()
 	parsed, err := parser.ParseFile(fset, absFilePath, nil, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing file %s: %v", absFilePath, err)
 	}
 	data, err := os.ReadFile(absFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading file %s: %v", absFilePath, err)
 	}
 
 	if ignore.Match(fileName, data) {
