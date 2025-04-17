@@ -1,10 +1,6 @@
-## Forked from t-yuki
+## juju fork of boumenot/gocover-cobertura
 
 This is a **fork** of https://github.com/boumenot/gocover-cobertura.
-
-At the time of this writing the repository appears to be on *pause* with
-several outstanding PRs, and forks with interesting contributions.  This
-repo consolidates those outstanding forks, and combines them into one repo.
 
 go tool cover XML (Cobertura) export
 ====================================
@@ -27,7 +23,7 @@ Usage
 
     $ go test -coverprofile=coverage.txt -covermode count github.com/gorilla/mux
     $ gocover-cobertura < coverage.txt > coverage.xml
-    
+
 Note that you should run this from the directory which holds your `go.mod` file.
 
 Some flags can be passed (each flag should only be used once):

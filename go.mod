@@ -1,8 +1,6 @@
-module github.com/boumenot/gocover-cobertura
+module github.com/juju/gocover-cobertura
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24.2
 
 require (
 	github.com/stretchr/testify v1.8.2
